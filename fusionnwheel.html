@@ -1,0 +1,223 @@
+
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Fusion Wheel — Fusion Restaurant Café</title>
+  <style>
+    :root{
+      --accent:#ff6f00;
+      --bg:#fff8e1;
+      --card:#fff3e0;
+      --muted:#666;
+    }
+    body{ margin:0; font-family:Inter,Segoe UI,Helvetica,Arial; background:var(--bg); color:#333; display:flex; align-items:center; justify-content:center; min-height:100vh; padding:20px; box-sizing:border-box;}
+    .wrap{ max-width:420px; width:100%; text-align:center; }
+    h1{ margin:8px 0 18px; color:var(--accent); font-size:22px;}
+    .wheel-wrap{ position:relative; margin:0 auto; width:320px; height:320px; }
+    canvas{ border-radius:50%; box-shadow: 0 8px 20px rgba(0,0,0,0.08); background:transparent; }
+    .pointer{
+      position:absolute; left:50%; top:0; transform:translateX(-50%); width:0;height:0;
+      border-left:18px solid transparent; border-right:18px solid transparent; border-bottom:28px solid #fff;
+      filter: drop-shadow(0 2px 4px rgba(0,0,0,0.2));
+    }
+    .spin-btn{ margin-top:18px; background:var(--accent); color:white; border:none; padding:12px 26px; border-radius:28px; font-weight:700; font-size:16px; box-shadow:0 6px 14px rgba(255,111,0,0.25); cursor:pointer;}
+    .spin-btn[disabled]{ opacity:.6; cursor:default; transform:none; box-shadow:none;}
+    .result-card{ margin-top:18px; background:var(--card); padding:12px 14px; border-radius:14px; display:none; align-items:center; justify-content:center;}
+    .code{ font-weight:800; color:var(--accent); font-size:18px; }
+    .prize-text{ font-size:16px; margin-bottom:6px; }
+    .small{ font-size:13px; color:var(--muted);}
+    .qr{ margin-top:18px; background:white; padding:12px; display:inline-block; border-radius:8px; box-shadow: 0 6px 18px rgba(0,0,0,0.08);}
+    .brand{ margin-top:14px; color:#8a4b00; font-weight:700;}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>🎉 Fusion Wheel — Fusion Restaurant Café</h1>
+
+    <div class="wheel-wrap" id="wheelWrap">
+      <div class="pointer" aria-hidden="true"></div>
+      <canvas id="wheel" width="320" height="320"></canvas>
+    </div>
+
+    <button id="spinBtn" class="spin-btn">SPIN NOW</button>
+
+    <div id="result" class="result-card" role="status" aria-live="polite">
+      <div>
+        <div class="prize-text" id="prizeText"></div>
+        <div>Show this code at the counter:</div>
+        <div class="code" id="couponCode"></div>
+        <div class="small">One use per table. Valid today only.</div>
+      </div>
+    </div>
+
+    <div class="qr" id="qrWrap" title="Scan to open this page">
+      <div style="font-size:13px; margin-bottom:8px;">Scan to open this page</div>
+      <img id="qrImg" src="" alt="QR code" width="160" height="160" style="display:block;"/>
+    </div>
+
+    <div class="brand">Fusion Restaurant Café — Enjoy your meal 🍽️</div>
+  </div>
+
+<script>
+/* --- Prize definitions --- */
+const prizes = [
+  {label: "05% OFF", value: "05% OFF"},
+  {label: "Free Coffee ", value: "Share On Instagram Get Free Coffee"},
+  {label: "10% OFF", value: "Order 499 10% OFF"},
+  {label: "Flat ₹50 OFF", value: "Nxt Order Value 550 Flat ₹50 OFF"},
+  {label: "Get Free Dosa", value: "Bill 599 Get Free Dosa"},
+  {label: "Try Again", value: "Try Again"}
+];
+
+const canvas = document.getElementById('wheel');
+const ctx = canvas.getContext('2d');
+const size = canvas.width;
+const center = size/2;
+const radius = size/2 - 8;
+
+/* draw wheel */
+function drawWheel() {
+  const seg = prizes.length;
+  const arc = (Math.PI * 2) / seg;
+  const colors = ["#ffecd1","#fff4e6","#fff8f0","#fff4e6","#ffecd1","#fff8f0"];
+
+  ctx.clearRect(0,0,size,size);
+  ctx.save();
+  ctx.translate(center, center);
+
+  for (let i=0;i<seg;i++){
+    const start = i * arc;
+    ctx.beginPath();
+    ctx.moveTo(0,0);
+    ctx.arc(0,0,radius,start,start+arc,false);
+    ctx.closePath();
+    ctx.fillStyle = colors[i % colors.length];
+    ctx.fill();
+    ctx.strokeStyle = "#f6d9b3";
+    ctx.stroke();
+
+    // label
+    ctx.save();
+    ctx.rotate(start + arc/2);
+    ctx.translate(radius * 0.62,0);
+    ctx.rotate(Math.PI/2);
+    ctx.fillStyle = "#8a4b00";
+    ctx.font = "bold 14px Arial";
+    ctx.textAlign = "center";
+    ctx.fillText(prizes[i].label, 0, 0);
+    ctx.restore();
+  }
+
+  // center circle
+  ctx.beginPath();
+  ctx.arc(0,0,48,0,Math.PI*2);
+  ctx.fillStyle = "#fff3e0";
+  ctx.fill();
+  ctx.strokeStyle = "#ffd19a";
+  ctx.stroke();
+
+  ctx.fillStyle = "#ff6f00";
+  ctx.font = "bold 16px Arial";
+  ctx.textAlign = "center";
+  ctx.fillText("SPIN", 0, 6);
+
+  ctx.restore();
+}
+
+/* animate spin */
+let isSpinning=false;
+let currentRotation = 0;
+
+function spin() {
+  if (isSpinning) return;
+  isSpinning = true;
+  resultEl.style.display = "none";
+  const seg = prizes.length;
+  const rndIndex = Math.floor(Math.random() * seg);
+  const degreesPerSeg = 360 / seg;
+  // target: spin many full turns plus land on rndIndex
+  const extraTurns = 6 + Math.floor(Math.random()*3); // 6-8 full turns
+  const targetDeg = extraTurns*360 + (rndIndex * degreesPerSeg) + degreesPerSeg/2;
+  const start = performance.now();
+  const duration = 4200; // ms
+
+  const startRotation = currentRotation % 360;
+
+  function easeOutCubic(t){ return 1 - Math.pow(1-t, 3); }
+
+  function frame(now){
+    const t = Math.min(1, (now - start) / duration);
+    const eased = easeOutCubic(t);
+    const newRotation = startRotation + (targetDeg - startRotation) * eased;
+    currentRotation = newRotation;
+    canvas.style.transform = `rotate(${currentRotation}deg)`;
+    if (t < 1){ requestAnimationFrame(frame); }
+    else {
+      isSpinning = false;
+      // determine winner
+      const finalDeg = (360 - (currentRotation % 360) + 90) % 360; // normalize; 90 deg offset for pointer
+      const idx = Math.floor(finalDeg / degreesPerSeg) % seg;
+      const prize = prizes[idx].value;
+      showResult(prize);
+    }
+  }
+  requestAnimationFrame(frame);
+}
+
+/* show result and coupon */
+const resultEl = document.getElementById('result');
+const prizeText = document.getElementById('prizeText');
+const couponCodeEl = document.getElementById('couponCode');
+function showResult(prize){
+  prizeText.innerText = (prize === "Try Again") ? "Oh no — Try Again!" : `You won: ${prize}`;
+  const code = (prize === "Try Again") ? "n/a" : generateCoupon();
+  couponCodeEl.innerText = (code === "n/a") ? "—" : code;
+  resultEl.style.display = "flex";
+}
+
+/* coupon generator */
+function generateCoupon(){
+  const n = Math.floor(1000 + Math.random()*9000);
+  return `FUSION-${n}`;
+}
+
+/* QR image generation (uses Google Charts API) */
+function setQrToCurrentUrl(){
+  const img = document.getElementById('qrImg');
+  let url = window.location.href;
+  // If opened as file locally, set placeholder text for easier printing:
+  if (url.startsWith('file://')) {
+    // Suggest replacing with hosted URL after you upload
+    url = prompt("You're opening file locally. Enter the final public URL where you'll host this page (e.g. https://yourdomain.com/fusion-wheel.html). The QR will be generated for that URL. If you want the local file URL, click OK.", url) || url;
+  }
+  const encoded = encodeURIComponent(url);
+  // Google Charts QR endpoint:
+  img.src = `https://chart.googleapis.com/chart?chs=200x200&cht=qr&chl=${encoded}&choe=UTF-8`;
+}
+
+/* init */
+drawWheel();
+setQrToCurrentUrl();
+
+document.getElementById('spinBtn').addEventListener('click', function(){
+  if (isSpinning) return;
+  // disable button visually while spinning
+  const btn = this;
+  btn.disabled = true;
+  btn.innerText = "Spinning...";
+  spin();
+  // re-enable after animation finishes (duration + small buffer)
+  setTimeout(() => { btn.disabled = false; btn.innerText = "SPIN NOW"; }, 4600);
+});
+
+/* responsive: redraw on resize */
+window.addEventListener('resize', () => {
+  // nothing complicated: canvas drawn relative to its set width. Keep simple.
+});
+
+/* Accessibility hint: let user regenerate QR if needed */
+document.getElementById('qrImg').addEventListener('click', setQrToCurrentUrl);
+</script>
+</body>
+</html>
